@@ -15,6 +15,8 @@
 #include "buttons.h"
 // Colors
 #include "colors.h"
+// tetronimos
+#include "tetronimo.c"
 
 // ########################## VARIABLES ###############################
 
@@ -31,8 +33,46 @@ wchar_t text[20];
 // display
 static hagl_backend_t *display;
 
+// timer
+uint16_t tetris_timer;
 // board
-int board[20][20];
+int board[12][20];
+// score
+int score;
+// active squares
+int active_sq[8];
+// is there active
+bool is_active;
+
+// move the active tetronimo
+void move_tetronimo() {
+    for(int i=3; i>=0; i--) {
+        if(active_sq[i*2+1] != 19) {
+            board[active_sq[i*2]][active_sq[i*2+1]+1] = board[active_sq[i*2]][active_sq[i*2+1]];
+            board[active_sq[i*2]][active_sq[i*2+1]] = 0;
+            active_sq[i*2+1]++;
+        } else {
+            is_active = false;
+        }
+    }
+}
+
+// draw the board
+void draw_board() {
+    for(int i=0; i<12; i++) {
+        for(int j=0; j<20; j++) {
+            if(board[i][j] == 0) hagl_fill_rectangle_xywh(display, i*12, j*12, 12, 12, color_darkgray);
+            else if(board[i][j] == 1) hagl_fill_rectangle_xywh(display, i*12, j*12, 12, 12, color_lightblue);
+            else if(board[i][j] == 2) hagl_fill_rectangle_xywh(display, i*12, j*12, 12, 12, color_blue);
+            else if(board[i][j] == 3) hagl_fill_rectangle_xywh(display, i*12, j*12, 12, 12, color_orange);
+            else if(board[i][j] == 4) hagl_fill_rectangle_xywh(display, i*12, j*12, 12, 12, color_yellow);
+            else if(board[i][j] == 5) hagl_fill_rectangle_xywh(display, i*12, j*12, 12, 12, color_lightgreen);
+            else if(board[i][j] == 6) hagl_fill_rectangle_xywh(display, i*12, j*12, 12, 12, color_purple);
+            else if(board[i][j] == 7) hagl_fill_rectangle_xywh(display, i*12, j*12, 12, 12, color_red);
+            hagl_draw_rectangle_xywh(display, i*12, j*12, 12, 12, color_black);
+        }
+    }
+}
 
 int main()
 {
@@ -45,6 +85,9 @@ int main()
     // Init buttons
     buttons_init();
 
+    // ending
+    bool end;
+
     while(true) {
         // ################################################# Game logic ##############################################################
         uint64_t start = time_us_64();
@@ -53,21 +96,94 @@ int main()
         
         // initialise variables
         srand(start);
+        end = false;
+
+        // timer
+        tetris_timer = 0;
+        // score
+        score = 0;
+        // active squares
+        for(int i=0; i<8; i++) {
+            active_sq[i] = 0;
+        }
+        is_active = false;
+
+        // Draw the board
+        draw_board();
 
         while (true) {
             // Game logic
             // start frame timer
             uint64_t start = time_us_64();
+            tetris_timer++;
 
             // read input
-            if(!gpio_get(JOY_UP)) {
+            if(end) {
+                if(!gpio_get(KEY_Y)) {
+                    if(end) break;
+                }
+            } else {
+                if(!gpio_get(JOY_UP)) {
+                    
+                } else if(!gpio_get(JOY_DOWN)) {
+                    tetris_timer = 60;
+                } else if(!gpio_get(JOY_LEFT)) {
+                    
+                } else if(!gpio_get(JOY_RIGHT)) {
+                    
+                }
+            }
+
+            // move
+            if(tetris_timer >= 60 && !end) {
+                if(!is_active) {
+                    is_active = true;
+                    // put in new tetronimo
+                    u_int8_t r = rand() % 7;
+                    if(board[4][0] != 0 && tetronimo[0+8*r] != 0) {
+                        end = true;
+                    } else board[4][0] = tetronimo[0+8*r];
+                    if(board[5][0] != 0 && tetronimo[1+8*r] != 0) {
+                        end = true;
+                    } board[5][0] = tetronimo[1+8*r];
+                    if(board[6][0] != 0 && tetronimo[2+8*r] != 0) {
+                        end = true;
+                    } board[6][0] = tetronimo[2+8*r];
+                    if(board[7][0] != 0 && tetronimo[3+8*r] != 0) {
+                        end = true;
+                    } board[7][0] = tetronimo[3+8*r];
+                    if(board[4][1] != 0 && tetronimo[4+8*r] != 0) {
+                        end = true;
+                    } board[4][1] = tetronimo[4+8*r];
+                    if(board[5][1] != 0 && tetronimo[5+8*r] != 0) {
+                        end = true;
+                    } board[5][1] = tetronimo[5+8*r];
+                    if(board[6][1] != 0 && tetronimo[6+8*r] != 0) {
+                        end = true;
+                    } board[6][1] = tetronimo[6+8*r];
+                    if(board[7][1] != 0 && tetronimo[7+8*r] != 0) {
+                        end = true;
+                    } board[7][1] = tetronimo[7+8*r];
+                    uint8_t helper = 0;
+                    for(int i=0; i<8; i++) {
+                        if(tetronimo[i+8*r] >0) {
+                            if(i<4) {
+                                active_sq[helper] = 4+i;
+                                active_sq[helper+1] = 0;
+                            } else {
+                                active_sq[helper] = i;
+                                active_sq[helper+1] = 1;
+                            }
+                            helper+=2;
+                        }
+                    }
+                } else {
+                    move_tetronimo();
+                }
                 
-            } else if(!gpio_get(JOY_DOWN)) {
-                
-            } else if(!gpio_get(JOY_LEFT)) {
-                
-            } else if(!gpio_get(JOY_RIGHT)) {
-                
+                // draw board
+                draw_board();
+                tetris_timer = 0;
             }
         
             // Flush back buffer contents to display
