@@ -1,3 +1,4 @@
+#undef __STRICT_ANSI__
 #include <stdio.h>
 #include <string.h>
 #include "pico/stdlib.h"
@@ -39,8 +40,14 @@ uint16_t tetris_timer;
 int board[12][20];
 // score
 int score;
+// ending
+bool end;
 // active squares
 int active_sq[8];
+// rotation and square type
+uint8_t sq_type;
+uint8_t rotation;
+
 // is there active
 bool is_active;
 // buttons
@@ -65,7 +72,6 @@ void move_tetronimo() {
     } else {
         for(int i=3; i>=0; i--) {
             board[active_sq[i*2]][active_sq[i*2+1]] = board[active_sq[i*2]][active_sq[i*2+1]] * (-1);
-            active_sq[i*2+1]++;
         }
     }
 }
@@ -141,6 +147,12 @@ void draw_board() {
         }
     }
     hagl_fill_rectangle_xywh(display, 145, 0, 95, 240, color_darkgray);
+    swprintf(text, sizeof(text), L"SCORE: %u", score);
+    hagl_put_text(display, text, 160, 20, color_white, font6x9);
+    if(end) {
+        swprintf(text, sizeof(text), L"GAME OVER");
+        hagl_put_text(display, text, 160, 40, color_red, font6x9);
+    }
 }
 
 int main()
@@ -153,9 +165,6 @@ int main()
     hagl_clear(display);
     // Init buttons
     buttons_init();
-
-    // ending
-    bool end;
 
     while(true) {
         // ################################################# Game logic ##############################################################
@@ -171,6 +180,9 @@ int main()
         tetris_timer = 0;
         // score
         score = 0;
+        // square type and rotation
+        sq_type = 0;
+        rotation = 0;
         // active squares
         for(int i=0; i<8; i++) {
             active_sq[i] = 0;
@@ -179,7 +191,7 @@ int main()
         // clear board
         for(int i=0; i<12; i++) {
             for(int j=0; j<20; j++) {
-                board[i][j] == 0;
+                board[i][j] = 0;
             }
         }
         // clear keys
@@ -197,7 +209,7 @@ int main()
             // read input
             if(end) {
                 if(!gpio_get(KEY_Y)) {
-                    if(end) break;
+                    break;
                 }
             } else {
                 if(!gpio_get(KEY_A)) {
@@ -217,7 +229,7 @@ int main()
                 }
             }
 
-            if(tetris_timer%20 == 10) {
+            if(tetris_timer%30 == 15) {
                 if(joy_left) {
                     move_tetronimo_left();
                     joy_left = false;
@@ -239,6 +251,8 @@ int main()
                     is_active = true;
                     // put in new tetronimo
                     u_int8_t r = rand() % 7;
+                    sq_type = r;
+                    rotation = 0;
                     if(board[4][0] != 0 && tetronimo[0+8*r] != 0) {
                         end = true;
                     } else board[4][0] = -tetronimo[0+8*r];
