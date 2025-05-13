@@ -34,8 +34,10 @@ wchar_t text[20];
 // display
 static hagl_backend_t *display;
 
-// timer
+// timers
 uint16_t tetris_timer;
+uint16_t move_timer;
+uint16_t rotate_timer;
 // board
 int board[12][20];
 // score
@@ -46,7 +48,7 @@ bool end;
 int active_sq[8];
 // pivot and square type
 uint8_t sq_type;
-uint8_t pivot_xy[2];
+float pivot_xy[2];
 
 // is there active
 bool is_active;
@@ -114,8 +116,8 @@ void move_tetronimo_right() {
     pivot_xy[0] += 1;
 }
 
-// rotate the active tetronimo right (clockwise)
-void rotate_tetronimo_right() {
+// rotate the active tetronimo left (anti-clockwise)
+void rotate_tetronimo_left() {
     int8_t temp_x = 0;
     int8_t temp_y = 0;
     int8_t temp = 0;
@@ -132,6 +134,31 @@ void rotate_tetronimo_right() {
         temp = active_sq[i*2];
         temp_x = active_sq[i*2+1] - pivot_xy[1] + pivot_xy[0];
         temp_y = -temp + pivot_xy[0] + pivot_xy[1];
+        board[active_sq[i*2]][active_sq[i*2+1]] += sq_type;
+        board[temp_x][temp_y] -= sq_type;
+        active_sq[i*2] = temp_x;
+        active_sq[i*2+1] = temp_y;
+    }
+}
+
+// rotate the active tetronimo right (clockwise)
+void rotate_tetronimo_right() {
+    int8_t temp_x = 0;
+    int8_t temp_y = 0;
+    int8_t temp = 0;
+    for(int i=0; i<4; i++) {
+        temp = active_sq[i*2];
+        temp_x = -active_sq[i*2+1] + pivot_xy[1] + pivot_xy[0];
+        temp_y = temp - pivot_xy[0] + pivot_xy[1];
+        if(temp_x < 0 || temp_x > 11 || temp_y < 0 || temp_y > 19 || board[temp_x][temp_y] > 0) {
+            return;
+        }
+    }
+
+    for(int i=0; i<4; i++) {
+        temp = active_sq[i*2];
+        temp_x = -active_sq[i*2+1] + pivot_xy[1] + pivot_xy[0];
+        temp_y = temp - pivot_xy[0] + pivot_xy[1];
         board[active_sq[i*2]][active_sq[i*2+1]] += sq_type;
         board[temp_x][temp_y] -= sq_type;
         active_sq[i*2] = temp_x;
@@ -172,13 +199,8 @@ void draw_board() {
             else if(board[i][j] == 5 || board[i][j] == -5) hagl_fill_rectangle_xywh(display, i*12, j*12, 12, 12, color_lightgreen);
             else if(board[i][j] == 6 || board[i][j] == -6) hagl_fill_rectangle_xywh(display, i*12, j*12, 12, 12, color_purple);
             else if(board[i][j] == 7 || board[i][j] == -7) hagl_fill_rectangle_xywh(display, i*12, j*12, 12, 12, color_red);
-            else hagl_fill_rectangle_xywh(display, i*12, j*12, 12, 12, color_white);
             hagl_draw_rectangle_xywh(display, i*12, j*12, 12, 12, color_black);
         }
-    }
-
-    for(int i=3; i>=0; i--) {
-        hagl_draw_rectangle_xywh(display, active_sq[i*2]*12, active_sq[i*2+1]*12, 12, 12, color_lightgreen);
     }
 
     hagl_fill_rectangle_xywh(display, 145, 0, 95, 240, color_darkgray);
@@ -213,6 +235,8 @@ int main()
 
         // timer
         tetris_timer = 0;
+        move_timer = 0;
+        rotate_timer = 0;
         // score
         score = 0;
         // square type
@@ -242,6 +266,8 @@ int main()
             // start frame timer
             uint64_t start = time_us_64();
             tetris_timer++;
+            if(move_timer>0) move_timer--;
+            if(rotate_timer>0) rotate_timer--;
 
             // read input
             if(end) {
@@ -251,37 +277,41 @@ int main()
             } else {
                 if(!gpio_get(KEY_A)) {
                     key_b = joy_left = joy_right = false;
-                    key_a = true;
+                    if(rotate_timer == 0) key_a = true;
                 } else if(!gpio_get(KEY_B)) {
                     key_a = joy_left = joy_right = false;
-                    key_b = true;
+                    if(rotate_timer == 0) key_b = true;
                 } else if(!gpio_get(JOY_DOWN)) {
                     tetris_timer = 60;
                 } else if(!gpio_get(JOY_LEFT)) {
                     key_a = key_b = joy_right = false;
-                    joy_left =  true;
+                    if(move_timer == 0) joy_left =  true;
                 } else if(!gpio_get(JOY_RIGHT)) {
                     key_a = key_b = joy_left = false;
-                    joy_right =  true;
+                    if(move_timer == 0) joy_right =  true;
                 }
             }
 
-            if(tetris_timer%30 == 15) {
-                if(joy_left) {
-                    move_tetronimo_left();
-                    joy_left = false;
-                    draw_board();
-                } else if(joy_right) {
-                    move_tetronimo_right();
-                    joy_right = false;
-                    draw_board();
-                } else if(key_a) {
-                    rotate_tetronimo_right();
-                    key_a = false;
-                    draw_board();
-                } else if(key_b) {
-                    
-                }
+            if(joy_left) {
+                move_timer = 30;
+                move_tetronimo_left();
+                joy_left = false;
+                draw_board();
+            } else if(joy_right) {
+                move_timer = 30;
+                move_tetronimo_right();
+                joy_right = false;
+                draw_board();
+            } else if(key_a) {
+                rotate_timer = 30;
+                rotate_tetronimo_right();
+                key_a = false;
+                draw_board();
+            } else if(key_b) {
+                rotate_timer = 30;
+                rotate_tetronimo_left();
+                key_b = false;
+                draw_board();
             }
 
             // move
