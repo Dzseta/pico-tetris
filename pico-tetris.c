@@ -44,9 +44,9 @@ int score;
 bool end;
 // active squares
 int active_sq[8];
-// rotation and square type
+// pivot and square type
 uint8_t sq_type;
-uint8_t rotation;
+uint8_t pivot_xy[2];
 
 // is there active
 bool is_active;
@@ -65,8 +65,8 @@ void move_tetronimo() {
 
     if(is_active) {
         for(int i=3; i>=0; i--) {
-            board[active_sq[i*2]][active_sq[i*2+1]+1] = board[active_sq[i*2]][active_sq[i*2+1]];
-            board[active_sq[i*2]][active_sq[i*2+1]] = 0;
+            board[active_sq[i*2]][active_sq[i*2+1]] += sq_type;
+            board[active_sq[i*2]][active_sq[i*2+1]+1] -= sq_type;
             active_sq[i*2+1]++;
         }
     } else {
@@ -74,6 +74,7 @@ void move_tetronimo() {
             board[active_sq[i*2]][active_sq[i*2+1]] = board[active_sq[i*2]][active_sq[i*2+1]] * (-1);
         }
     }
+    pivot_xy[1] += 1;
 }
 
 // move the active tetronimo left
@@ -87,10 +88,11 @@ void move_tetronimo_left() {
     }
 
     for(int i=0; i<4; i++) {
-        board[active_sq[i*2]-1][active_sq[i*2+1]] = board[active_sq[i*2]][active_sq[i*2+1]];
-        board[active_sq[i*2]][active_sq[i*2+1]] = 0;
+        board[active_sq[i*2]-1][active_sq[i*2+1]] -= sq_type;
+        board[active_sq[i*2]][active_sq[i*2+1]] += sq_type;
         active_sq[i*2]--;
     }
+    pivot_xy[0] -= 1;
 }
 
 // move the active tetronimo right
@@ -104,9 +106,36 @@ void move_tetronimo_right() {
     }
 
     for(int i=3; i>=0; i--) {
-        board[active_sq[i*2]+1][active_sq[i*2+1]] = board[active_sq[i*2]][active_sq[i*2+1]];
-        board[active_sq[i*2]][active_sq[i*2+1]] = 0;
+        board[active_sq[i*2]+1][active_sq[i*2+1]] -= sq_type;
+        board[active_sq[i*2]][active_sq[i*2+1]] += sq_type;
         active_sq[i*2]++;
+    }
+
+    pivot_xy[0] += 1;
+}
+
+// rotate the active tetronimo right (clockwise)
+void rotate_tetronimo_right() {
+    int8_t temp_x = 0;
+    int8_t temp_y = 0;
+    int8_t temp = 0;
+    for(int i=0; i<4; i++) {
+        temp = active_sq[i*2];
+        temp_x = active_sq[i*2+1] - pivot_xy[1] + pivot_xy[0];
+        temp_y = -temp + pivot_xy[0] + pivot_xy[1];
+        if(temp_x < 0 || temp_x > 11 || temp_y < 0 || temp_y > 19 || board[temp_x][temp_y] > 0) {
+            return;
+        }
+    }
+
+    for(int i=0; i<4; i++) {
+        temp = active_sq[i*2];
+        temp_x = active_sq[i*2+1] - pivot_xy[1] + pivot_xy[0];
+        temp_y = -temp + pivot_xy[0] + pivot_xy[1];
+        board[active_sq[i*2]][active_sq[i*2+1]] += sq_type;
+        board[temp_x][temp_y] -= sq_type;
+        active_sq[i*2] = temp_x;
+        active_sq[i*2+1] = temp_y;
     }
 }
 
@@ -143,9 +172,15 @@ void draw_board() {
             else if(board[i][j] == 5 || board[i][j] == -5) hagl_fill_rectangle_xywh(display, i*12, j*12, 12, 12, color_lightgreen);
             else if(board[i][j] == 6 || board[i][j] == -6) hagl_fill_rectangle_xywh(display, i*12, j*12, 12, 12, color_purple);
             else if(board[i][j] == 7 || board[i][j] == -7) hagl_fill_rectangle_xywh(display, i*12, j*12, 12, 12, color_red);
+            else hagl_fill_rectangle_xywh(display, i*12, j*12, 12, 12, color_white);
             hagl_draw_rectangle_xywh(display, i*12, j*12, 12, 12, color_black);
         }
     }
+
+    for(int i=3; i>=0; i--) {
+        hagl_draw_rectangle_xywh(display, active_sq[i*2]*12, active_sq[i*2+1]*12, 12, 12, color_lightgreen);
+    }
+
     hagl_fill_rectangle_xywh(display, 145, 0, 95, 240, color_darkgray);
     swprintf(text, sizeof(text), L"SCORE: %u", score);
     hagl_put_text(display, text, 160, 20, color_white, font6x9);
@@ -180,9 +215,8 @@ int main()
         tetris_timer = 0;
         // score
         score = 0;
-        // square type and rotation
+        // square type
         sq_type = 0;
-        rotation = 0;
         // active squares
         for(int i=0; i<8; i++) {
             active_sq[i] = 0;
@@ -194,6 +228,9 @@ int main()
                 board[i][j] = 0;
             }
         }
+        // clear pivots
+        pivot_xy[0] = 0;
+        pivot_xy[1] = 0;
         // clear keys
         key_a = key_b = joy_left = joy_right = false;
 
@@ -239,7 +276,9 @@ int main()
                     joy_right = false;
                     draw_board();
                 } else if(key_a) {
-                    
+                    rotate_tetronimo_right();
+                    key_a = false;
+                    draw_board();
                 } else if(key_b) {
                     
                 }
@@ -251,8 +290,7 @@ int main()
                     is_active = true;
                     // put in new tetronimo
                     u_int8_t r = rand() % 7;
-                    sq_type = r;
-                    rotation = 0;
+                    sq_type = r+1;
                     if(board[4][0] != 0 && tetronimo[0+8*r] != 0) {
                         end = true;
                     } else board[4][0] = -tetronimo[0+8*r];
@@ -277,6 +315,8 @@ int main()
                     if(board[7][1] != 0 && tetronimo[7+8*r] != 0) {
                         end = true;
                     } else board[7][1] = -tetronimo[7+8*r];
+                    pivot_xy[0] = pivots[2*r];
+                    pivot_xy[1] = pivots[2*r+1];
                     uint8_t helper = 0;
                     for(int i=0; i<8; i++) {
                         if(tetronimo[i+8*r] >0) {
